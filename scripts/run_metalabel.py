@@ -29,12 +29,11 @@ def vol_match(s: pd.Series, target: pd.Series) -> pd.Series:
     return s * (target.std() / sd) if sd > 0 else s
 
 
-def main():
-    df = pd.read_parquet(FEAT) if FEAT.exists() else build()
-    df = oos_walk_forward_proba(df, FEATURES, "y", "date", MIN_TRAIN, REFIT, sw_col="uw")
-    oos = df.dropna(subset=["proba"]).copy()
+def eval_config(df, sw_col):
+    """Walk-forward OOS with a given training sample-weight; return (oos, raw_daily, modes)."""
+    d = oos_walk_forward_proba(df.copy(), FEATURES, "y", "date", MIN_TRAIN, REFIT, sw_col=sw_col)
+    oos = d.dropna(subset=["proba"]).copy()
     raw_d = daily(oos, np.ones(len(oos)))
-
     modes = {}
     for mode in ["linear", "threshold", "prob"]:
         bs = bet_size(oos["proba"].to_numpy(), mode=mode)
@@ -46,6 +45,14 @@ def main():
             hit_taken=float((oos.loc[taken, "R"] > 0).mean()) if taken.any() else None,
             daily=md,
         )
+    return oos, raw_d, modes
+
+
+def main():
+    df = pd.read_parquet(FEAT) if FEAT.exists() else build()
+    # headline = WITH uniqueness weighting; also compute WITHOUT it (robustness disclosure)
+    oos, raw_d, modes = eval_config(df, "uw")
+    _, _, modes_no_uw = eval_config(df, None)
 
     # descriptive feature importances (full-sample fit; the OOS proba came from walk-forward)
     m = train_meta_model(oos[FEATURES].to_numpy(), oos["y"].to_numpy(), sample_weight=oos["uw"].to_numpy())
@@ -65,6 +72,13 @@ def main():
                        maxdd=v["compare"]["meta"]["maxdd"], d_sharpe=v["compare"]["d_sharpe"],
                        taken_frac=v["taken_frac"], hit_taken=v["hit_taken"]) for k, v in modes.items()},
         best_mode=best, importances=importances,
+        robustness=dict(
+            with_uw={k: round(modes[k]["compare"]["d_sharpe"], 3) for k in modes},
+            without_uw={k: round(modes_no_uw[k]["compare"]["d_sharpe"], 3) for k in modes},
+            note="The gain is contingent on the uniqueness weighting (uw = 1/same-day-trade-count). "
+                 "Without uw, threshold meta-labeling is roughly neutral. It is NOT lookahead (uw weights "
+                 "only past-dated training rows); the effect is directionally robust across seed/refit/warmup GIVEN uw.",
+        ),
         equity=dict(dates=[str(d.date()) for d in eq_raw.index],
                     raw=[round(float(v), 4) for v in eq_raw.values],
                     meta=[round(float(v), 4) for v in eq_meta.values]),
@@ -82,8 +96,10 @@ def main():
         print(f"  meta[{k:9s}] Sharpe {c['sharpe']:.2f} ({v['compare']['d_sharpe']:+.2f})  DSR {c['dsr']*100:.0f}%  "
               f"maxDD {c['maxdd']*100:.1f}%  taken {v['taken_frac']*100:.0f}%  hit {ht}{tag}")
     print("  feature importances:", ", ".join(f"{k} {v:.2f}" for k, v in importances.items()))
+    print(f"  ROBUSTNESS: threshold dSharpe WITH uw {modes['threshold']['compare']['d_sharpe']:+.2f}  |  "
+          f"WITHOUT uw {modes_no_uw['threshold']['compare']['d_sharpe']:+.2f}  (gain is contingent on uniqueness weighting)")
     verdict = "HELPS" if modes[best]["compare"]["d_sharpe"] > 0.05 else ("NEUTRAL" if modes[best]["compare"]["d_sharpe"] > -0.05 else "HURTS")
-    print(f"  VERDICT: meta-labeling {verdict} (best delta Sharpe {modes[best]['compare']['d_sharpe']:+.2f})")
+    print(f"  VERDICT: meta-labeling {verdict} (best dSharpe {modes[best]['compare']['d_sharpe']:+.2f}), conditional on uw")
     return out
 
 

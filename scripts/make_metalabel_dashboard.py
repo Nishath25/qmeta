@@ -42,6 +42,9 @@ def build_html(sc):
     bm = modes[best]
     eq = sc["equity"]
     imp = sc["importances"]
+    rob = sc.get("robustness", {})
+    wu = rob.get("with_uw", {}).get("threshold", bm["d_sharpe"])
+    nu = rob.get("without_uw", {}).get("threshold", 0.0)
     maxi = max(imp.values()) or 1.0
     imp_bars = "".join(
         f'<div class="ir"><span class="iname">{k}</span>'
@@ -135,8 +138,15 @@ footer{{color:var(--muted);font-size:12px;margin-top:24px}}
     {imp_bars}
   </div>
 
-  <footer>Trained walk-forward (2y warmup, quarterly refit); features known at entry; ATR_MAX=3.0 build.
-  Caveat: one model family; the best of 3 sizing modes was selected on OOS (DSR already deflates for K=19 trials).</footer>
+  <div class="panel" style="border-left:3px solid var(--meta)">
+    <h2>Robustness &mdash; the honest caveat</h2>
+    <p class="sub" style="margin:0">The gain is <b>leakage-free</b> (walk-forward traced end-to-end; vol-match is scale-invariant),
+    but <b>contingent on the uniqueness weighting</b> (uw = 1/same-day-trade-count): threshold &Delta;Sharpe is
+    <b style="color:var(--good)">{wu:+.2f} with uw</b> vs <b>{nu:+.2f} without</b>. Given uw it stays positive across
+    seed, refit cadence, and warmup; drop uw and meta-labeling is roughly neutral. uw is not lookahead (it weights only
+    past training rows). Also: best-of-3 sizing modes selected on OOS (DSR deflates for K=19); maxDD is vol-matched.</p>
+  </div>
+  <footer>Trained walk-forward (2y warmup, quarterly refit); features known at entry; ATR_MAX=3.0 build.</footer>
 </div>'''
 
 
