@@ -25,6 +25,14 @@ def test_nco_block_runs_and_sums():
     assert abs(w.sum() - 1.0) < 1e-9 and np.isfinite(w.values).all()
 
 
+def test_nco_symmetric_blocks_give_equal_weight():
+    # two symmetric correlated blocks (unit variances) -> NCO allocates equally to all four
+    corr = np.array([[1, .9, 0, 0], [.9, 1, 0, 0], [0, 0, 1, .9], [0, 0, .9, 1]], dtype=float)
+    w = nco_weights(corr, max_k=3, seed=0)          # cov == corr (unit variances)
+    assert abs(w.sum() - 1.0) < 1e-9
+    assert np.allclose(w.values, 0.25, atol=0.03)   # intra 0.5/0.5, inter 0.5/0.5 -> 0.25 each
+
+
 def test_cluster_corr_recovers_two_blocks():
     labels = cluster_corr(cov_to_corr(_block_cov()), max_k=4, seed=0)
     assert labels[0] == labels[1] == labels[2]

@@ -36,6 +36,7 @@ def build_html(sc):
     a, b = sc["panel_a"], sc["panel_b"]
     best_split = max(a["splits"], key=lambda k: a["splits"][k]["sharpe"])
     naive = a["splits"]["50/50"]["sharpe"]
+    tilt = a["splits"]["inverse-vol (risk parity)"]["sharpe"]
     arows = ""
     for k, v in a["splits"].items():
         ws = " &middot; ".join(f'{c} {v["weights"][c]*100:.0f}%' for c in a["cols"])
@@ -79,18 +80,20 @@ footer{{color:var(--muted);font-size:12px;margin-top:24px}}
 <div class="wrap">
   <div class="eyebrow">qmeta &middot; portfolio construction (HRP / NCO)</div>
   <h1>Does principled allocation beat the hand-tuned 50/50?</h1>
-  <p class="lede">Hierarchical Risk Parity and Nested-Clustered Optimization vs the baselines, on your real
-  streams. The honest answer: <b>a risk-based ORB/dip tilt beats flat 50/50</b>, but on a well-conditioned
-  multi-sleeve panel naive equal-weight is hard to beat &mdash; HRP's edge is for ill-conditioned problems.</p>
+  <p class="lede">Hierarchical Risk Parity and Nested-Clustered Optimization vs the baselines, evaluated
+  strictly <b>out-of-sample</b> on your real streams (weights fit on a trailing window, applied forward). The honest
+  answer: <b>naive allocation is hard to beat</b> &mdash; flat 50/50 (ORB/dip) and equal-weight (sleeves) win OOS.
+  A clean reproduction of the "1/N beats optimization out-of-sample" result.</p>
 
   <div class="panel">
-    <h2>Panel A &middot; ORB vs dip &mdash; the principled split</h2>
+    <h2>Panel A &middot; ORB vs dip &mdash; rolling out-of-sample</h2>
     <p class="sub">ORB vol {a["vol"][a["cols"][0]]*100:.0f}%, dip vol {a["vol"][a["cols"][1]]*100:.0f}%.
-    Full-period Sharpe of each fixed split. Your 50/50 scores {naive:.2f}.</p>
-    <table><thead><tr><th>method</th><th>weights</th><th>Sharpe</th></tr></thead><tbody>{arows}</tbody></table>
-    <p class="note">Take-away: the flat 50/50 leaves a little on the table &mdash; tilting toward the lower-vol
-    ORB sleeve (risk-parity {a["splits"]["inverse-vol (risk parity)"]["weights"][a["cols"][0]]*100:.0f}/{a["splits"]["inverse-vol (risk parity)"]["weights"][a["cols"][1]]*100:.0f})
-    lifts Sharpe to {a["splits"][best_split]["sharpe"]:.2f}.</p>
+    Rolling OOS Sharpe (252-day trailing weights applied forward); average weights shown. 50/50 scores {naive:.2f}.</p>
+    <table><thead><tr><th>method</th><th>avg weights</th><th>OOS Sharpe</th></tr></thead><tbody>{arows}</tbody></table>
+    <p class="note">Take-away: <b>keep the 50/50</b>. Out-of-sample it beats the risk-based tilts
+    ({naive:.2f} vs {tilt:.2f} for risk-parity). An in-sample fit made a tilt-toward-ORB look better, but that edge
+    does <b>not</b> survive honest testing &mdash; fitting the weights on the past and applying them forward, flat
+    50/50 wins.</p>
   </div>
 
   <div class="panel">
@@ -100,10 +103,11 @@ footer{{color:var(--muted);font-size:12px;margin-top:24px}}
     {equity_svg(b["dates"], b["equity"])}
     <div class="legend">{legend}</div>
     <table style="margin-top:16px"><thead><tr><th>method</th><th>Sharpe</th><th>vol</th><th>maxDD</th><th>effN</th></tr></thead><tbody>{brows}</tbody></table>
-    <p class="note">HRP and NCO are correct and stable, but here they don't beat equal-weight or Markowitz
-    min-variance: with 9 well-behaved sleeves and a full year of data the covariance is well-conditioned, so
-    HRP's robustness (its advantage when the matrix is near-singular) has nothing to fix. The risk-based
-    methods do cut volatility to ~1.4% (from equal-weight's 3.1%) &mdash; useful if low vol is the goal.</p>
+    <p class="note">Why equal-weight wins: the 8 ORB instrument sleeves are <b>intermittent</b> (30&ndash;50% zero-return
+    days), so a sleeve's <i>variance</i> is depressed by inactivity, not by genuinely lower risk. Every variance-based
+    allocator therefore piles weight into the low-variance intermittent sleeves &mdash; cutting vol to ~1.4% (from
+    equal-weight's 3.1%) but sacrificing the diversified return equal-weight captures. Variance is a poor risk proxy
+    for sparse sleeves; HRP/NCO are implemented correctly but can't fix that (their real edge is ill-conditioned covariances).</p>
   </div>
 
   <footer>qmeta Phase 3 &middot; HRP (LdP 2016) + NCO (LdP 2019) + baselines &middot; rolling OOS, no lookahead.</footer>
