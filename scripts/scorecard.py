@@ -51,15 +51,16 @@ def grade_stream(returns: pd.Series, name: str, n_trials: int = N_TRIALS, ppy: i
 
 
 def build_scorecard() -> dict:
-    from load_streams import load_orb, load_orb_ticker_matrix, load_dip
+    from load_streams import load_orb, load_orb_config_variants, load_dip
     orb, dip = load_orb(), load_dip()
     cards = {"orb": grade_stream(orb, "ORB fund"), "dip": grade_stream(dip, "Dip diversifier")}
     for key in cards:
         cards[key]["empirical_maxdd"] = EMPIRICAL_MAXDD[key]
-    # PBO on ORB per-ticker columns: does the best in-sample instrument survive OOS?
-    mat = load_orb_ticker_matrix()
-    cards["orb"]["pbo"] = probability_of_backtest_overfitting(mat.values, n_splits=10)["pbo"]
-    cards["orb"]["pbo_note"] = f"across {mat.shape[1]} per-ticker return columns"
+    # PBO across a family of ORB sizing/cost CONFIGURATIONS: does the config that
+    # looks best in-sample stay above the median out-of-sample? (true overfitting test)
+    variants = load_orb_config_variants()
+    cards["orb"]["pbo"] = probability_of_backtest_overfitting(variants.values, n_splits=10)["pbo"]
+    cards["orb"]["pbo_note"] = f"across {variants.shape[1]} sizing/cost configs"
     # Strategy approval: ORB approved, dip candidate (annualized Sharpes, aligned corr)
     sa, sn = cards["orb"]["sharpe_ann"], cards["dip"]["sharpe_ann"]
     a0, a1 = orb.align(dip, join="inner")
@@ -75,8 +76,20 @@ def build_scorecard() -> dict:
     }
     scorecard = {"streams": cards, "approval": approval, "n_trials": N_TRIALS}
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(scorecard, indent=2, default=float))
+    OUT.write_text(json.dumps(_sanitize(scorecard), indent=2, default=float))
     return scorecard
+
+
+def _sanitize(o):
+    """Replace non-finite floats with None so the JSON is standards-compliant."""
+    import math
+    if isinstance(o, float):
+        return o if math.isfinite(o) else None
+    if isinstance(o, dict):
+        return {k: _sanitize(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_sanitize(v) for v in o]
+    return o
 
 
 def _print(sc: dict) -> None:

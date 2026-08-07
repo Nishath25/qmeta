@@ -21,6 +21,12 @@ def test_expected_max_sharpe_grows_with_trials():
     assert expected_max_sharpe(1, 1.0) == 0.0
 
 
+def test_expected_max_sharpe_literal_anchor():
+    # Standalone anchor (independent of gauntlet parity, which may skip):
+    # N=19, var=1 -> bracket = (1-g)Z(1-1/19) + g*Z(1-1/(19e)) = 1.87802
+    assert abs(expected_max_sharpe(19, 1.0) - 1.87802) < 1e-4
+
+
 def test_dsr_is_psr_at_deflated_threshold():
     from qmeta.selection.sharpe import probabilistic_sharpe_ratio
     star = expected_max_sharpe(20, 1.0 / 2000)

@@ -20,8 +20,8 @@ def deannualize_sr(sr_ann: float, ppy: int = 252) -> float:
 
 def probabilistic_sharpe_ratio(sr, n_obs, skew, kurt, sr_star=0.0) -> float:
     """P(true SR > sr_star) given estimation error and higher moments. In [0,1]."""
-    denom = math.sqrt(1.0 - skew * sr + ((kurt - 1.0) / 4.0) * sr * sr)
-    stat = (sr - sr_star) * math.sqrt(n_obs - 1.0) / denom
+    denom = math.sqrt(max(1e-12, 1.0 - skew * sr + ((kurt - 1.0) / 4.0) * sr * sr))
+    stat = (sr - sr_star) * math.sqrt(max(1.0, n_obs - 1.0)) / denom
     return float(norm.cdf(stat))
 
 

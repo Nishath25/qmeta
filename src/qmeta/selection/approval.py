@@ -43,6 +43,9 @@ def indifference_curve(sr_app: float, level: float = None, n: int = 101):
         c = sr_app ** 2 - level ** 2 * (1.0 - rho ** 2)
         disc = b * b - 4.0 * c
         if disc < 0:
-            continue
+            if disc > -1e-9 * (1.0 + b * b):
+                disc = 0.0  # catastrophic cancellation on the boundary; clamp to 0
+            else:
+                continue
         out[i] = (-b + math.sqrt(disc)) / 2.0  # larger root = candidate SR needed
     return corrs, out

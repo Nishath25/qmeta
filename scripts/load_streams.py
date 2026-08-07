@@ -33,6 +33,24 @@ def load_orb_ticker_matrix(min_days: int = 60) -> pd.DataFrame:
     return piv[keep].fillna(0.0)
 
 
+def load_orb_config_variants(wcaps=(1.0, 1.5, 2.0, 3.0, 1e9), costs=(0.0, 0.02, 0.04)) -> pd.DataFrame:
+    """A family of ORB strategy CONFIGURATIONS as daily-return columns, for a
+    genuine strategy-overfitting PBO. Each column caps the signal weight w at
+    `wcap` and deducts `cost` R/trade (both are real tuned hyperparameters, per
+    the gauntlet trial audit). Capping w changes which trades dominate, so the
+    columns have genuinely different time profiles -- the right input for CSCV."""
+    t = pd.read_parquet(ORB_TRADES)
+    t["date"] = pd.to_datetime(t["date"])
+    cols = {}
+    for cap in wcaps:
+        wc = np.minimum(t["w"].to_numpy(), cap)
+        for c in costs:
+            x = (t["R"].to_numpy() - c) * wc * ORB_R_TO_RET
+            s = pd.Series(x, index=t["date"]).groupby(level=0).sum()
+            cols[f"wcap{cap:g}_cost{c:g}"] = s
+    return pd.DataFrame(cols).sort_index().fillna(0.0)
+
+
 def _dip_portfolio_equity() -> pd.Series:
     """Capital-constrained dip sim -> equity series (fraction of start capital)."""
     panel = pd.read_parquet(DIP_DIR / "panel.parquet")

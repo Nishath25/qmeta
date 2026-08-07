@@ -47,7 +47,10 @@ def min_backtest_length(n_trials: int, target_sr_ann: float) -> float:
 def _columns_sharpe(mat: np.ndarray) -> np.ndarray:
     mu = mat.mean(axis=0)
     sd = mat.std(axis=0, ddof=1)
-    return np.where(sd > 0, mu / sd, -np.inf)
+    sr = np.zeros_like(mu, dtype=float)
+    ok = sd > 1e-12
+    sr[ok] = mu[ok] / sd[ok]
+    return sr  # near-constant columns -> 0.0 (neutral: never spuriously best or worst)
 
 
 def probability_of_backtest_overfitting(returns_matrix, n_splits: int = 16) -> dict:

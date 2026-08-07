@@ -30,7 +30,7 @@ def _status(kind, c):
         if v is None:
             return ("na", None, "single aggregated stream")
         return ("good" if v <= .20 else "warn" if v <= .50 else "bad", None,
-                "instrument choice holds OOS" if v <= .20 else "some selection fragility")
+                "config choice robust OOS" if v <= .20 else "some config overfitting")
     return ("na", None, "")
 
 
